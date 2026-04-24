@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars and edit for your local setup.
+#
+# `states` controls which YAML fragments under ./states/ are loaded and
+# merged by the imported ../platformer/config module. Fragments are merged
+# in left-to-right order; overlapping keys are resolved by last-wins.
+
+states = [
+  "core",
+  # "fineweb-edu",   # enables the ingest worker (requires the ingest module - not yet scaffolded)
+  # "chat-http",     # enables the HTTP chat endpoint (requires the chat module - not yet scaffolded)
+]

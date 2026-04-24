@@ -1,0 +1,53 @@
+# core.yaml
+#
+# The atomspace substrate definition. This is the minimum state fragment
+# needed to produce a running CogServer with generated atom-schema and
+# decay-rules Scheme files.
+#
+# Merge semantics: deep-merged with other loaded fragments in left-to-right
+# tfvars order. Non-overlapping keys accumulate; overlapping keys take the
+# last-written value.
+
+matrix: {}
+
+services:
+  atomspace:
+    core:
+      image: opencog/learn:latest
+      cogserver:
+        port: 18080
+      storage:
+        driver: atomspace-rocks
+        path: /data/atoms
+        snapshot_policy:
+          every_sleep_cycles: 10
+          retain: 5
+
+    # Atom-type schema. Each type lists the float-valued properties it
+    # carries, with per-property defaults and log-decay rates. Property
+    # decay rates give multi-timescale stability: low rates anchor an
+    # atom's learned identity, high rates keep values plastic.
+    schema:
+      fragments:
+        properties:
+          count:
+            default: 0.0
+            decay_rate: 0.001       # slow: preserve long-term statistics
+          activation:
+            default: 0.0
+            decay_rate: 0.1         # fast: limits cross-walker-step influence
+
+      concepts:
+        properties:
+          gate:
+            default: 1.0
+            decay_rate: 0.01        # moderate: gates adapt over many cycles
+          stability:
+            default: 0.0
+            decay_rate: 0.0005      # very slow: stability is itself a long-memory signal
+
+      disjuncts:
+        properties:
+          count:
+            default: 0.0
+            decay_rate: 0.002

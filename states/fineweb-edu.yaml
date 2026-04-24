@@ -1,0 +1,23 @@
+# fineweb-edu.yaml
+#
+# Declares the corpus-ingest service configuration. Enabling this fragment
+# (by including "fineweb-edu" in tfvars `states`) would normally cause the
+# ingest worker to start and begin tokenizing fineweb-edu into FragmentAtoms.
+#
+# Currently the ingest module is not yet scaffolded, so this fragment is
+# an authoring target: when you write the ingest module, this fragment
+# will feed it without edits here.
+
+services:
+  ingest:
+    core:
+      corpus:
+        source: huggingface
+        dataset: HuggingFaceFW/fineweb-edu
+        streaming: true
+        sample_tokens: 1000000       # POC-scale budget; ~1M tokens
+      tokenizer:
+        method: whitespace           # naive MVP tokenizer; upgrade later
+        lowercase: true
+      rate:
+        tokens_per_second: 1000      # gentle on laptop CPU

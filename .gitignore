@@ -1,0 +1,24 @@
+# Terraform state and plan files
+# .terraform.lock.hcl IS committed on purpose (provider version pinning)
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.lock.hcl
+.terraform/
+crash.log
+crash.*.log
+
+# Generated engine artifacts
+.versus/
+
+# Local tfvars (not committed - use terraform.tfvars.example as reference)
+terraform.tfvars
+*.auto.tfvars
+
+# Editor / OS / tooling
+*.swp
+*.swo
+.DS_Store
+.vscode/
+.idea/
+.claude/

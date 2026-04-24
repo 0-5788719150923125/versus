@@ -1,0 +1,19 @@
+# chat-http.yaml
+#
+# Declares the chat endpoint configuration. Enabling this fragment would
+# normally cause the chat module to start an HTTP server that routes
+# prompts into inference walks and serves fragment-stitched responses
+# with trajectory provenance.
+#
+# Currently the chat module is not yet scaffolded.
+
+services:
+  chat:
+    core:
+      endpoint:
+        type: http                   # http | telnet
+        bind: 127.0.0.1
+        port: 8080
+      response:
+        max_fragments: 16
+        include_provenance: true     # attach atom-trajectory provenance to every response
