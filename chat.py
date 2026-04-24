@@ -40,14 +40,19 @@ DEFAULT_PORT = 17001
 # or similar). Strip escape sequences before any marker detection or user display.
 ANSI_ESCAPE_RE = re.compile(rb"\x1b\[[0-9;]*[A-Za-z]")
 
-# Markers that signal "the REPL is waiting for input." Matched after ANSI stripping.
+# Markers retained only for cosmetic cleanup in clean_response, not for
+# response-end detection (see read_response).
 PROMPT_MARKERS = (b"scheme@", b"guile> ", b"guile>\n")
 
-# Tunables. Generous enough for a laptop CogServer still warming up; tight
-# enough that a missed prompt does not stall the loop indefinitely.
+# Tunables.
 CONNECT_TIMEOUT = 10.0
-INITIAL_DRAIN_TIMEOUT = 1.5
-READ_TIMEOUT = 3.0
+INITIAL_DRAIN_TIMEOUT = 0.3
+# Response detection: read until the server has been idle for IDLE_TIMEOUT,
+# capped at MAX_WAIT. A burst-then-idle pattern is exactly what a REPL
+# produces per evaluation, so idle-detection is faster and more reliable
+# than counting prompt markers.
+IDLE_TIMEOUT = 0.15
+MAX_WAIT = 5.0
 RECONNECT_RETRIES = 2
 
 
@@ -73,30 +78,28 @@ def drain(sock: socket.socket, timeout: float) -> bytes:
     return buf
 
 
-def count_prompts(cleaned: bytes) -> int:
-    return sum(cleaned.count(m) for m in PROMPT_MARKERS)
-
-
-def read_response(sock: socket.socket, timeout: float, initial_prompt_count: int) -> bytes:
-    """Read until we see at least TWO new prompt markers beyond the initial
-    baseline: one appears as the REPL echoes the command, the second appears
-    after the value is computed. Single-prompt detection fires too early and
-    causes responses to be attributed to the wrong iteration."""
-    sock.settimeout(timeout)
+def read_response(sock: socket.socket, max_wait: float, idle_timeout: float) -> bytes:
+    """Read until the server has been idle for `idle_timeout` (response
+    done) or `max_wait` elapses (safety bound). Idle detection works
+    because the REPL emits the echo, value, and next prompt as a single
+    burst per evaluation; after that it waits for us."""
+    sock.settimeout(idle_timeout)
     buf = b""
-    deadline = time.monotonic() + timeout
+    deadline = time.monotonic() + max_wait
     try:
         while time.monotonic() < deadline:
             try:
                 chunk = sock.recv(4096)
             except socket.timeout:
-                break
+                # No data for idle_timeout. If we have something, the
+                # response is complete; otherwise keep waiting for the
+                # first byte.
+                if buf:
+                    break
+                continue
             if not chunk:
                 break
             buf += chunk
-            cleaned = strip_ansi(buf)
-            if count_prompts(cleaned) >= initial_prompt_count + 2:
-                break
     finally:
         sock.settimeout(None)
     return buf
@@ -164,12 +167,11 @@ def send_with_retry(sock_holder: list[socket.socket | None], host: str, port: in
                 time.sleep(0.5)
                 continue
         try:
-            # Baseline any stray prompts sitting in the buffer, then send,
-            # then read until two more prompts appear (echo + value-done).
-            pre = drain(sock, 0.05)
-            initial = count_prompts(strip_ansi(pre))
+            # Clear any stray bytes (rare, but cheap insurance) then send,
+            # then read until the REPL goes idle.
+            drain(sock, 0.02)
             sock.sendall((expression + "\n").encode("utf-8"))
-            raw = read_response(sock, READ_TIMEOUT, initial)
+            raw = read_response(sock, MAX_WAIT, IDLE_TIMEOUT)
             return clean_response(raw, expression)
         except (BrokenPipeError, ConnectionResetError, OSError) as e:
             last_err = e

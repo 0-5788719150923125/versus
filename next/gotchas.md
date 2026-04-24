@@ -141,28 +141,32 @@ plenty.
 Modern `docker compose` warns that `version: '3.9'` is ignored and
 should be removed. Dropped from the template.
 
-### CogServer's Scheme REPL prompts arrive colored and fragmented
+### Driving the CogServer Scheme REPL over telnet is fiddly
 
-Guile's REPL inside the container emits ANSI-colored prompts
-(`\x1b[0;34mguile\x1b[1;34m> \x1b[0m`). Three pitfalls:
+Three pitfalls, all of which bit us during the chat MVP:
 
-1. **Byte-level marker detection fails on colored prompts.** `guile> `
-   is split by color codes in the raw stream; `"guile> " in buf` never
-   matches. Fix: strip ANSI escapes before doing marker detection.
-2. **Single-prompt detection fires too early.** After sending a command,
-   the REPL echoes it and emits a prompt BEFORE computing the value.
-   Reading "until prompt" returns the echo + prompt, leaving the value
-   still in the socket buffer. The next iteration's read then picks up
-   the previous iteration's value, causing responses to shift by one.
-   Fix: read until TWO new prompt markers have appeared (one for echo,
-   one for value-done).
-3. **Leading prompt fragments at the start of response lines.** Even
-   with proper marker-counting, the response often begins with
-   `guile> <actual-value>` on the same line. Strip leading prompt
-   prefixes from every line in the response, not just line-matching.
+1. **Prompts arrive ANSI-colored.** Guile emits prompts like
+   `\x1b[0;34mguile\x1b[1;34m> \x1b[0m`, so byte-level string matches
+   for `guile> ` fail - the color codes split the string. Fix: strip
+   ANSI escapes before any marker detection or line-cleaning.
+2. **Do not try to count prompts; detect idle instead.** The obvious
+   approach of "read until N prompts have appeared" is brittle: the
+   REPL's prompt emission after a command is `$N = value\n` + new
+   prompt (one prompt, not two), and residual prompts from
+   connect-time can be mistaken for response prompts. Either you wait
+   too long (hit timeout) or you fire too early (off-by-one across
+   iterations). The robust fix is to read until the socket has been
+   idle for a short window (say 150ms): the REPL emits everything for
+   a single evaluation as one burst, then waits. Idle-detection is
+   faster and correct by construction.
+3. **Leading prompt fragments cling to response lines.** Even with
+   proper response detection, the first line of a response often
+   begins with `guile> ` (the prompt concatenated with its next
+   output). Strip leading prompt prefixes from every line in
+   `clean_response`, not just whole-line matching.
 
-All three fixes live in `chat.py`. If you write another REPL-driver,
-expect to rediscover these.
+See `chat.py` for the working approach. If you write another
+REPL-driver, expect to rediscover these.
 
 ### Container startup race after `terraform apply`
 
@@ -171,3 +175,16 @@ before the telnet port is ready for commands. Running `chat.py`
 immediately after `apply` often hits a `BrokenPipeError` on the first
 send. Fix: `chat.py` already has connect-retry with a short backoff;
 if that is not enough, `sleep 3` before running.
+
+### Initial drains dominate chat startup latency
+
+The first `chat.py` invocation after the container is running costs
+~0.8s mostly spent in two `INITIAL_DRAIN_TIMEOUT` windows (one after
+TCP connect, one after `scheme\n`). We tuned this to 0.3s each as a
+balance: shorter risks truncating the banner before all of it arrives
+on a slow start, longer just wastes time. Per-command latency after
+connect is ~0.15s (dominated by `IDLE_TIMEOUT`).
+
+If chat.py feels slow, these are the knobs. If you see responses
+missing content, the idle timeout may be too short and you are
+truncating legitimate server output.

@@ -91,6 +91,7 @@ design. Read in any order; each is self-contained.
 - [next/roadmap.md](./next/roadmap.md) - build order and priorities
 - [next/chat.md](./next/chat.md) - chat MVP design (done; kept as reference)
 - [next/walker.md](./next/walker.md) - **immediate next build target**
+- [next/ideas.md](./next/ideas.md) - speculative design notes; things worth thinking about but not yet committed
 - [next/commitments.md](./next/commitments.md) - the seven design commitments that should not drift
 - [next/evaluation.md](./next/evaluation.md) - falsifiability metrics and realistic success bar
 - [next/historical.md](./next/historical.md) - URE post-mortem and the Eve lesson (the design's backward-looking rationale)
