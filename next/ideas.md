@@ -298,6 +298,171 @@ from a user directive), fetching targets that want.
 
 ---
 
+## Atomese-from-YAML: procedures as typed-block compositions
+
+*Seed: April 2026, user observation while reviewing walker.scm and
+inference.scm. Platformer's `tests/states/*.yaml` pattern (each YAML a
+different composition of the same typed components) made the shape
+legible.*
+
+Today we are writing Atomese procedures by hand in `.scm` files:
+walker.scm's `versus-walker-tick`, inference.scm's `versus-respond`,
+etc. That scales poorly for a project whose whole point is testing
+different cognitive architectures. The user's framing: we will want a
+fast way to try different "theories of mind."
+
+The proposal: **treat Scheme procedure construction as a
+building-blocks / pipelining problem.** Define typed, reusable Atomese
+components. Compose them into procedures via YAML state fragments.
+Let Terraform render the composition as actual Scheme at apply time.
+A "theory of mind" becomes a YAML file, not a codebase.
+
+### Rough shape
+
+A library of typed blocks, each with a declared input / output type
+and a known Scheme implementation. Rough inventory from current
+hand-written code:
+
+- `tokenize`: string → word-list (parameters: source, prefix-strip)
+- `words-to-pairs`: word-list → pair-list (parameters: window size,
+  directional or not)
+- `filter`: atom-list → atom-list (parameters: predicate by name
+  prefix, type, or custom)
+- `ensure-atom`: key → atom (parameters: schema type, name template)
+- `increment`: atom → atom (parameters: property name)
+- `decay`: atom → atom (parameters: property name, rate)
+- `walk-from`: atom → atom-trajectory (parameters: depth, link types,
+  selection policy)
+- `match-and-emit`: atom → atom-list (parameters: pattern,
+  substitution)
+
+And YAML composes them:
+
+```yaml
+services:
+  procedures:
+    versus-walker-tick:
+      input: FragmentAtom
+      pipeline:
+        - tokenize: { source: cog-name, prefix-strip: "frag:" }
+        - words-to-pairs: { size: 2, directional: true }
+        - ensure-atom: { schema: pairs, name: "pair:{w1}>>{w2}" }
+        - increment: { property: count }
+```
+
+Terraform renders this as:
+
+```scheme
+(define-public (versus-walker-tick fragment-atom)
+  (let* ((words (versus-tokenize-surface fragment-atom "frag:"))
+         (pairs (versus-words-to-pairs words 2 #t)))
+    (for-each
+      (lambda (pair-data)
+        (let ((atom (versus-ensure-atom "pairs" pair-data)))
+          (versus-increment atom "count")))
+      pairs)))
+```
+
+The rendered procedure IS the Scheme that runs; no interpretation
+overhead. Compile-time composition, not runtime rule application.
+
+### Why this is interesting
+
+- **Theories of mind become first-class artifacts.** A cognitive
+  architecture is a state fragment. Swapping theories = loading a
+  different state fragment. Version-controllable, diffable,
+  reviewable.
+- **Fast iteration on the design space.** The cost of trying a new
+  walker algorithm drops from "write + test + debug new Scheme" to
+  "compose existing blocks differently in YAML."
+- **Component reuse across procedures.** The same `words-to-pairs`
+  block serves the walker (pair counting), future generation (picking
+  next words), future clustering (finding similar-context pairs).
+- **Matches Platformer's pattern.** Consistent with the rest of the
+  project's declarative surface: state-fragment YAML is the authoring
+  language, compiled artifacts are the engine.
+- **Testable at two levels.** Unit test individual blocks (pure Scheme
+  procedures with clear signatures). Integration test compositions
+  (do the rendered procedures produce the expected atom changes).
+- **Sidesteps URE's failure mode.** URE tried runtime rules that
+  composed at inference time, and it died partly because rules were
+  not first-class atoms and could not be learned. This is different:
+  composition happens at build time, in YAML, tracked in git, reviewed
+  like code. The runtime behavior is a concrete Scheme procedure. No
+  soft rules, no learnable rule infrastructure. If a new theory needs
+  learning-modifiable behavior, wants/needs handle that dimension
+  separately.
+
+### Where it gets hard
+
+- **Designing the block vocabulary is real work.** Too fine-grained =
+  incomprehensible compositions; too coarse = no reuse, just different
+  names for the same Scheme procedures. Finding the right grain
+  requires iteration against actual architectures we want to try.
+- **Block composition needs type discipline.** The output of one block
+  must be consumable by the next. Terraform does not have a real type
+  system; we would lean on convention plus validation in the rendering
+  module. Every mistyped pipeline caught at apply time is a win; every
+  mistyped pipeline caught only at runtime is a confusing failure mode.
+- **Debuggability.** When a composed procedure misbehaves, you debug
+  the YAML pipeline, not the rendered Scheme. This needs tooling:
+  source comments in generated Scheme pointing back to the state
+  fragment, clear error messages at render time, maybe a `terraform
+  output` that shows the expansion of each procedure.
+- **The block library becomes new infrastructure.** Someone has to
+  maintain it. Each block is a small Scheme procedure plus a YAML
+  schema plus documentation. Block-library refactors are compositions-
+  breaking changes for everyone using them.
+- **Escape hatches matter.** Some procedures will not fit the pipeline
+  shape (anything that is genuinely recursive or stateful across
+  iterations). We need a way to write raw Scheme for the 20% that does
+  not decompose. Ideally as a `raw-scheme:` block with a string
+  argument, so even raw Scheme lives in YAML compositions.
+
+### Why not current work
+
+- Four hand-written Scheme files total today (atom-schema, decay-rules,
+  inference, walker). The iteration-cost argument for a DSL does not
+  kick in at this scale; hand-written Scheme is fine.
+- No competing "theories of mind" to test side-by-side yet. Without
+  alternatives to swap between, the swap machinery has no purpose.
+- Premature DSL is a well-known smell. Wait until hand-writing Scheme
+  is clearly the bottleneck before committing to a DSL-and-compiler.
+
+### How to apply later
+
+1. **Wait for the trigger.** When we have two or three architectural
+   alternatives we want to test side-by-side and iteration cost is
+   visibly biting (probably after the first clustering / MI iteration
+   of the walker), start building.
+2. **Start from what exists.** Extract the block vocabulary directly
+   from current walker.scm and inference.scm. Do not invent blocks
+   speculatively; define blocks only where we can point at at least
+   two compositions that use them.
+3. **Render to the same .versus/ artifacts.** The block library should
+   produce the SAME Scheme files we already generate (walker.scm,
+   inference.scm, etc.), just from YAML instead of `.tftpl` templates.
+   No new runtime; just a different authoring surface.
+4. **Keep raw-Scheme as a first-class escape hatch.** A `raw:` block
+   that takes Scheme as a string keeps the 20% tricky cases in-
+   composition rather than splitting the surface.
+5. **Build an "expand" output** so operators can see what their YAML
+   rendered to. `terraform output -raw walker_scm` returns the
+   generated Scheme. This is the debuggability lifeline.
+
+### Cross-references
+
+- Complements [want / need modeling](#want--need-modeling): that one is
+  runtime-agentic (the system deciding what to do); this one is
+  build-time compositional (the developer deciding what the system's
+  behavior IS). Different axes; both apply.
+- Complements [driven ingest](#driven-ingest-ingestion-as-a-wantneed-action):
+  the different ActionAtom resolvers (sample-corpus, search-web,
+  knn-query, walk-region) would each be composed procedures under this
+  proposal.
+
+---
+
 ## Notes on graduated ideas
 
 *(Empty. When an idea graduates to active work, leave a stub here
