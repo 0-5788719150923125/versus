@@ -23,6 +23,18 @@ variable "config" {
   default     = {}
 }
 
+variable "walker_enabled" {
+  description = "If true, walker.scm is loaded by the cogserver at startup. Must be paired with the walker module writing walker.scm into generated_dir."
+  type        = bool
+  default     = false
+}
+
+variable "walker_script_hash" {
+  description = "SHA-256 of walker.scm, passed through so the cogserver null_resource recreates when walker.scm changes."
+  type        = string
+  default     = ""
+}
+
 variable "ingest_enabled" {
   description = "If true, the generated docker-compose includes the ingest service alongside cog."
   type        = bool

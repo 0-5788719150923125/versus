@@ -22,7 +22,12 @@
 %{ endfor ~}
 
 ;; ---------------------------------------------------------------------
-;; Initializer: given an atom and its type name, stamp property defaults.
+;; Initializer: given an atom and its type name, stamp property defaults
+;; ONLY for properties that are not already set. This is idempotent-safe:
+;; calling versus-init-atom on an already-initialized atom leaves its
+;; accumulated state intact. If you want to reset an atom's properties
+;; to defaults, do it explicitly; do not use this.
+;;
 ;; Usage: (versus-init-atom my-atom "fragments")
 ;; ---------------------------------------------------------------------
 
@@ -34,9 +39,9 @@
     (else '()))))
     (for-each
       (lambda (pair)
-        (cog-set-value! atom
-          (Predicate (car pair))
-          (cdr pair)))
+        (let ((key (Predicate (car pair))))
+          (if (not (cog-value atom key))
+              (cog-set-value! atom key (cdr pair)))))
       defaults)
     atom))
 

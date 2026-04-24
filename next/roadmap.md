@@ -33,15 +33,16 @@ Provenance is attached to every response.
 This is not the walker; it has no learning loop. What it proves is that
 the wiring works.
 
-### 2. Walker module
+### 2. ~~Walker module~~ **(shipped April 2026, minimal pair-counting slice)**
 
 Concrete design in [walker.md](./walker.md).
 
-After the chat MVP, the walker replaces the trivial `respond`
-implementation with a real inference walk, and adds wake/sleep learning
-cycles that populate the atom store from a corpus. The walker is the
-mechanism that, once working, unifies learning, inference, and
-generation (see [commitments.md](./commitments.md) § 7).
+First iteration shipped adjacent-pair counting per fragment
+observation, hooked into `versus-teach` so both conversation and ingest
+feed it. Top pairs after 100+ fineweb-edu fragments correctly surface
+common English bigrams (of>>the, at>>the, to>>the). MI computation,
+clustering, wake/sleep phase separation, and the unification with
+inference/generation walks are all follow-on work, not yet started.
 
 ### 3. ~~Ingest worker~~ **(shipped April 2026)**
 

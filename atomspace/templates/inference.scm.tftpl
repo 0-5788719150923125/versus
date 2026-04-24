@@ -12,67 +12,92 @@
              (srfi srfi-1)
              (srfi srfi-13))
 
-(define versus-fragment-prefix "frag:")
+(define-public versus-fragment-prefix "frag:")
 
-(define (versus-fragment-name? atom-name)
+(define-public (versus-fragment-name? atom-name)
   (string-prefix? versus-fragment-prefix atom-name))
 
-(define (versus-fragment-surface atom-name)
+(define-public (versus-fragment-surface atom-name)
   (substring atom-name (string-length versus-fragment-prefix)))
 
-(define (versus-increment-count! atom)
+(define-public (versus-increment-count! atom)
   (let* ((curr (cog-value atom (Predicate "count")))
          (val (if curr (cog-value-ref curr 0) 0.0))
          (new-val (+ val 1.0)))
     (cog-set-value! atom (Predicate "count") (FloatValue new-val))
     new-val))
 
+;; ---------------------------------------------------------------------
+;; Walker hooks
+;;
+;; versus-teach auto-ticks the walker on every observation. walker.scm,
+;; if loaded, replaces these stubs with real pair-counting and stats.
+;; If the walker state fragment is absent the stubs stay in force and
+;; teaching still works - just without pair accumulation.
+;; ---------------------------------------------------------------------
+
+(define-public (versus-walker-tick fragment-atom) #f)
+
+(define-public (versus-walker-stats)
+  "<walker not enabled; enable the walker state fragment to track pair statistics>")
+
+;; ---------------------------------------------------------------------
+
 (define-public (versus-teach sentence)
-  "Register a sentence as a FragmentAtom, incrementing count if already
-present. Returns a status string."
+  "Register a sentence as a FragmentAtom, incrementing count if it
+already exists, and notify the walker so pair statistics accumulate.
+Returns a status string."
   (let* ((key (string-append versus-fragment-prefix sentence))
          (fragment (Concept key)))
     (versus-init-atom fragment "fragments")
     (let ((count (versus-increment-count! fragment)))
+      (versus-walker-tick fragment)
       (format #f "learned: ~a (count=~a)" sentence count))))
 
-(define (versus-prompt-words prompt)
+(define-public (versus-prompt-words prompt)
   (filter (lambda (s) (not (string-null? s)))
           (string-split prompt #\space)))
 
-(define (versus-fragment-matches-words? fragment-atom words)
+(define-public (versus-fragment-matches-words? fragment-atom words)
   (let ((surface (versus-fragment-surface (cog-name fragment-atom))))
     (any
       (lambda (w) (if (string-contains surface w) #t #f))
       words)))
 
-(define (versus-all-fragments)
+(define-public (versus-all-fragments)
   (filter
     (lambda (a) (versus-fragment-name? (cog-name a)))
     (cog-get-atoms 'ConceptNode)))
 
-(define (versus-fragment-count fragment)
+(define-public (versus-fragment-count fragment)
   (let ((val (cog-value fragment (Predicate "count"))))
     (if val (cog-value-ref val 0) 0.0)))
 
+(define (versus-best-match matches)
+  "Pick the highest-count match. Ties broken arbitrarily (first seen)."
+  (fold
+    (lambda (f best)
+      (if (> (versus-fragment-count f) (versus-fragment-count best))
+        f best))
+    (car matches)
+    (cdr matches)))
+
 (define-public (versus-respond prompt)
-  "Find a FragmentAtom whose surface text overlaps with the prompt.
-Return surface text plus provenance, or a teach-me message if nothing
-matches."
+  "Auto-teach the prompt as a new observation, then return a matching
+fragment from PRE-EXISTING atoms (so the system does not echo the input
+back to itself). The teach side effect triggers the walker."
   (let* ((words (versus-prompt-words prompt))
-         (matches (filter
-                    (lambda (f) (versus-fragment-matches-words? f words))
-                    (versus-all-fragments))))
-    (if (null? matches)
-      "<no match - teach me with :teach first>"
-      ;; Pick the highest-count match. Ties broken arbitrarily (first seen).
-      (let* ((chosen (fold
-                       (lambda (f best)
-                         (if (> (versus-fragment-count f)
-                                (versus-fragment-count best))
-                           f best))
-                       (car matches)
-                       (cdr matches)))
+         ;; Snapshot matches BEFORE teaching so the just-added fragment
+         ;; cannot win the match competition against itself.
+         (existing-matches (filter
+                             (lambda (f) (versus-fragment-matches-words? f words))
+                             (versus-all-fragments))))
+    ;; Teach the prompt (and auto-tick the walker via versus-teach's hook).
+    (versus-teach prompt)
+    ;; Respond from pre-teach knowledge.
+    (if (null? existing-matches)
+      "<no match yet - the system is learning from this exchange>"
+      (let* ((chosen (versus-best-match existing-matches))
              (surface (versus-fragment-surface (cog-name chosen)))
              (count (versus-fragment-count chosen)))
         (format #f "~a [provenance: fragment ~a, count=~a]"

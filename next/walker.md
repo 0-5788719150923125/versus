@@ -1,32 +1,71 @@
-# Walker Module (next build target)
+# Walker Module
 
-*The walker is the first cognitive-layer subsystem to build on top of the
-substrate. It is the mechanism that unifies learning, inference, and
-generation (see [commitments.md](./commitments.md) § 7).*
+*The walker is the learning half of the substrate: structure
+accumulates here. This document describes a deliberately small first
+build, triggered from inside `versus-teach` rather than running
+autonomously.*
 
-## Scope for this build
+**Status: shipped April 2026.** Adjacent-pair counting per-teach is
+live; conversations and ingest both feed it via `versus-teach`'s
+hook into `versus-walker-tick`. MI, clustering, wake/sleep phases
+remain as follow-on work.
 
-Build **only the learning walker**. Specifically, stages A through D of
-`learn` V1's pipeline adapted to versus's substrate:
+## Scope for this build (April 2026)
 
-- **Stage A (wake):** read corpus tokens (mock / in-memory for now),
-  emit FragmentAtom and PairAtom observations, increment `count`
-  properties.
-- **Stages B-D (sleep):** apply log-decay to all decay-enabled
-  properties, compute mutual information on PairAtoms, cluster words
-  into WordClassAtoms via agglomerative clustering (simple version for
-  MVP; no Gaussian Orthogonal Ensemble yet).
+**Smallest-useful walker: adjacent-pair counting, triggered by every
+conversational input.** That is the whole algorithm in this iteration.
+
+Concretely:
+
+- One new atom type: **PairAtom**. Stored as `Concept "pair:<w1>>><w2>"`
+  with a `count` property that follows the same log-decay conventions
+  as other counted atoms.
+- One new procedure: `(versus-walker-tick fragment-atom)`. For each
+  adjacent word pair in the fragment's surface text, ensure a PairAtom
+  exists and increment its count.
+- One new observability procedure: `(versus-walker-stats)`. Returns a
+  human-readable summary: fragment count, pair count, top-5 pairs by
+  count.
+- **Integration with chat:** `versus-respond` auto-teaches the input
+  fragment and invokes `versus-walker-tick` on it. The walker runs as
+  a side effect of conversation, not as a separate background loop.
 
 Explicitly out of scope for this build:
 
-- Inference walks (not needed until chat module)
-- Generation walks (not needed until chat module)
-- Real corpus ingest (ingest module is a separate target)
-- Link Grammar MST parsing (stages E-G of `learn` V1; later)
-- Disjunct induction (stages H-J; later)
-- Long-distance statistics (stages K-L; later, and V1 itself is only
-  partial here)
-- Tiny transformer SelectorAtoms (deferred per commitment)
+- MI computation (next iteration).
+- Clustering / WordClassAtoms (iteration after that).
+- Wake/sleep phase separation (ditto).
+- Autonomous background scheduling / walker-runs-on-ingest (future).
+  Ingest-loaded fragments accumulate as raw fragments; they become
+  walker-processed only if the user references them in a conversation.
+- Link Grammar MST parsing, disjunct induction, long-distance stats.
+- Tiny transformer SelectorAtoms (deferred by commitment).
+
+## Why teach-triggered rather than walker-as-daemon
+
+User direction during scoping: "teaching should be automatic and
+learned via the conversation itself... [the walker] can learn from the
+data ingestion as well."
+
+The practical consequence: every `versus-teach` call triggers
+`versus-walker-tick` on the fragment, wherever the call came from.
+Ingest's per-fragment teach calls tick the walker exactly as
+conversational teaches do. Pair statistics accumulate continuously as
+a side effect of observation, whether the observation came from
+fineweb-edu streaming or a chat prompt.
+
+This is a deliberate simplification. A proper walker runs as its own
+process with explicit wake/sleep phases and scheduled decay / MI /
+clustering passes. That is more general. It is also more
+infrastructure (a long-lived container, cogserver-talking process,
+scheduling). We defer that until the pair-counting is proven useful.
+
+The coupling lives at the lowest level: inside `versus-teach`. Callers
+do not need to remember to tick; ticking is a property of teaching.
+The one design rule: the walker tick must be cheap enough per-call that
+ingest's 5-fragment/sec stream (or higher, later) is not slowed by it.
+For adjacent-pair counting over a 5-to-8-word fragment, that is ~4-7
+atomspace writes per tick, which is well under a millisecond.
 
 ## Module structure
 

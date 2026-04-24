@@ -55,8 +55,11 @@ module "ingest" {
 
 # ---------------------------------------------------------------------
 # Atomspace: the substrate. Generates Scheme and docker-compose,
-# spawns CogServer via local-exec. When ingest is enabled, the
-# generated compose also includes the ingest container.
+# spawns CogServer via local-exec.
+#
+# When the walker module is present, walker.scm is already written into
+# atomspace's generated_dir; we pass walker's content hash so atomspace
+# recreates the cogserver container when walker.scm changes.
 # ---------------------------------------------------------------------
 
 module "atomspace" {
@@ -65,9 +68,26 @@ module "atomspace" {
 
   config = lookup(module.config.service_configs, "atomspace", {})
 
+  walker_enabled     = module.resolver.walker_enabled
+  walker_script_hash = try(module.walker[0].script_hash, "")
+
   ingest_enabled    = module.resolver.ingest_enabled
   ingest_script_dir = try(module.ingest[0].script_dir, "")
   ingest_config     = try(module.ingest[0].resolved_config, {})
+}
+
+# ---------------------------------------------------------------------
+# Walker: loaded into the cogserver alongside inference.scm. Walker
+# writes its script into atomspace's generated_dir, so it must run
+# AFTER atomspace has declared the directory (but before atomspace's
+# null_resource.cogserver runs, which depends on walker's script_hash).
+# ---------------------------------------------------------------------
+
+module "walker" {
+  count  = module.resolver.walker_enabled ? 1 : 0
+  source = "./walker"
+
+  generated_dir = module.atomspace[0].generated_dir
 }
 
 # ---------------------------------------------------------------------

@@ -52,3 +52,9 @@ services:
           count:
             default: 0.0
             decay_rate: 0.002
+
+      pairs:
+        properties:
+          count:
+            default: 0.0
+            decay_rate: 0.001       # same as fragments: slow, preserve long-term stats

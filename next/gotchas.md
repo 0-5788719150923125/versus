@@ -176,6 +176,25 @@ immediately after `apply` often hits a `BrokenPipeError` on the first
 send. Fix: `chat.py` already has connect-retry with a short backoff;
 if that is not enough, `sleep 3` before running.
 
+### `versus-init-atom` must be idempotent-safe
+
+The initial implementation of `versus-init-atom` unconditionally called
+`cog-set-value!` for every property in the schema's defaults list. That
+meant the second and subsequent calls reset the atom's accumulated
+state (count, activation, etc.) back to zero. The visible symptom: every
+fragment's count stayed at 1.0 no matter how many times it was observed,
+and every pair's count stayed at 1.0 too.
+
+The fix: only call `cog-set-value!` on properties that are not already
+set. "Init" should mean "ensure defaults exist," not "reset to defaults."
+Callers that want to reset should do it explicitly.
+
+This was caught empirically: `(versus-teach "x")` called three times in
+a row returned count=1.0 each time instead of 1.0, 2.0, 3.0. Any
+learning mechanism downstream of init-atom was silently neutralized
+until this was fixed. Audit other atom-mutating procedures for similar
+"helpfully resets state" behaviors before trusting their output.
+
 ### Initial drains dominate chat startup latency
 
 The first `chat.py` invocation after the container is running costs

@@ -1,0 +1,16 @@
+# walker.yaml
+#
+# Enables the walker module. When loaded, walker.scm is copied into
+# the shared .versus/ directory and the cogserver loads it at startup
+# alongside inference.scm. Doing so replaces inference.scm's no-op
+# walker-tick stub with real pair-counting.
+#
+# The walker has no per-run configuration in this first iteration -
+# pair counting runs unconditionally on every fragment observation
+# (whether from chat or from ingest). Future iterations may add knobs
+# here for pair-distance windows, decay cadence, etc.
+
+services:
+  walker:
+    core:
+      # intentionally empty; walker.scm takes no runtime parameters yet

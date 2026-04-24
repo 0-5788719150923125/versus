@@ -63,8 +63,7 @@ locals {
     cogserver_telnet_port = local.cogserver_telnet_port
     storage_path          = local.storage_path
     path_generated        = local.generated_dir
-    walker_enabled        = false # TODO: wire when walker module lands
-    walker_image          = local.image
+    walker_enabled        = var.walker_enabled
     ingest_enabled        = var.ingest_enabled
     ingest_script_dir     = var.ingest_script_dir
     ingest_config         = var.ingest_config
@@ -121,6 +120,7 @@ resource "null_resource" "cogserver" {
     schema_hash    = local_file.atom_schema.content_sha256
     decay_hash     = local_file.decay_rules.content_sha256
     inference_hash = local_file.inference.content_sha256
+    walker_hash    = var.walker_script_hash
     compose_path   = local.compose_path
   }
 

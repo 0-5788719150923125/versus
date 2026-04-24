@@ -5,11 +5,15 @@ Backed by classic OpenCog Atomspace. Chat via grounded fragment composition.
 Built with Platformer's "good bones": state-fragment YAML, deep-merge
 composition, declarative artifact generation.
 
-**Status:** scaffolding complete. `terraform apply` generates Atomese and
-docker-compose from YAML and brings up a CogServer on `localhost:18080`.
-Walker, ingest, and chat subsystems are not yet built. See
-[next/roadmap.md](./next/roadmap.md) for what comes next and
-[next/walker.md](./next/walker.md) for the immediate next build target.
+**Status:** chat + ingest + walker MVPs shipped. `terraform apply` with
+`states = ["core", "fineweb-edu", "walker"]` brings up a CogServer and
+an ingest container; the ingest streams fineweb-edu at 5 fragments/sec
+into the atomspace, the walker counts adjacent word pairs on every
+observation (conversational or ingested), and `python3 chat.py` drives
+a grounded prompt/response loop with provenance and a `:stats` command.
+The `:teach` command was removed; learning is automatic from conversation
+and ingest. See [next/roadmap.md](./next/roadmap.md) for the rest of the
+build order.
 
 ## Quickstart
 
@@ -39,6 +43,10 @@ If you enabled the `fineweb-edu` state fragment, an ingest container is
 streaming real corpus data into the atomspace in the background at ~5
 fragments/second. Watch it with `docker compose -f .versus/docker-compose.yml logs -f ingest`
 or directly via `docker logs versus-ingest-1 -f`.
+
+If you enabled the `walker` state fragment, every observation (from
+conversation or ingest) auto-ticks the walker, which counts adjacent
+word pairs. Use `:stats` inside `chat.py` to see top pairs by count.
 
 Defaults to `localhost:17001`; override with `--host` / `--port` or
 `COGSERVER_HOST` / `COGSERVER_TELNET_PORT` env vars. Example session:
@@ -84,6 +92,7 @@ versus/
   resolver/                  versus-specific enable-flag logic
   atomspace/                 substrate module: schema and docker generation
   ingest/                    ingest module + static scripts/ingest.py
+  walker/                    walker module + static scripts/walker.scm
   states/                    operator-authored YAML; edit only here
 
   next/                      working documents; see "For deeper context"

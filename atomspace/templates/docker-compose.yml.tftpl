@@ -9,6 +9,9 @@ services:
                 (load \"/opt/versus/atom-schema.scm\")
                 (load \"/opt/versus/decay-rules.scm\")
                 (load \"/opt/versus/inference.scm\")
+%{ if walker_enabled ~}
+                (load \"/opt/versus/walker.scm\")
+%{ endif ~}
                 (start-cogserver)
                 (while #t (sleep 3600))"
     ports:
@@ -19,18 +22,6 @@ services:
       - versus_atomspace:/data/atoms
     restart: unless-stopped
 
-%{ if walker_enabled ~}
-  walker:
-    image: ${walker_image}
-    depends_on:
-      - cog
-    volumes:
-      - ${path_generated}:/opt/versus:ro
-    environment:
-      - COGSERVER_HOST=cog
-      - COGSERVER_PORT=${cogserver_port}
-    command: guile -L /opt/versus /opt/versus/walker.scm
-%{ endif ~}
 %{ if ingest_enabled ~}
   ingest:
     image: python:3.12-slim

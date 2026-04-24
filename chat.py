@@ -3,15 +3,18 @@
 
 Connects to a running CogServer's telnet endpoint, enters the Scheme
 REPL, and serves a prompt/response loop backed by the `versus-respond`
-and `versus-teach` procedures that the atomspace module generates into
+procedure that the atomspace module generates into
 /opt/versus/inference.scm and that CogServer loads at startup.
 
 Run after `terraform apply`:
 
     python3 chat.py
 
+Every prompt auto-teaches itself as a new observation: the system
+learns from conversation without an explicit `:teach` command.
+
 Commands:
-    :teach <sentence>    register a sentence as a FragmentAtom
+    :stats               show walker statistics (fragment / pair counts, top pairs)
     :quit                exit (Ctrl-D or Ctrl-C also work)
     <anything else>      prompt; returns a matching fragment with provenance
 
@@ -207,7 +210,7 @@ def main() -> int:
         return 1
 
     sock_holder: list[socket.socket | None] = [sock]
-    print("versus> connected. commands: :teach <text>, :quit")
+    print("versus> connected. commands: :stats, :quit. everything else is a prompt.")
 
     try:
         while True:
@@ -220,12 +223,8 @@ def main() -> int:
                 continue
             if line == ":quit":
                 break
-            if line.startswith(":teach "):
-                text = line[len(":teach "):].strip()
-                if not text:
-                    print("bot> <nothing to teach>")
-                    continue
-                expr = f'(versus-teach "{escape_for_scheme(text)}")'
+            if line == ":stats":
+                expr = "(versus-walker-stats)"
             else:
                 expr = f'(versus-respond "{escape_for_scheme(line)}")'
             try:

@@ -168,6 +168,134 @@ traverse from unfulfilled wants through needs toward actions.
 4. **External actions come last if at all.** Safety, scope, and
    responsibility questions need explicit answers before this step.
 
+**See also:** [Driven ingest](#driven-ingest-ingestion-as-a-wantneed-action)
+is a concrete application of this mechanism to the ingest pipeline.
+
+---
+
+## Driven ingest: ingestion as a want/need action
+
+*Seed: April 2026, user-proposed evolution of the ingest module. Builds
+directly on the [want / need modeling](#want--need-modeling) idea
+above.*
+
+Today's ingest is an always-on background process: a container streams
+fineweb-edu at 5 fragments/sec regardless of what the atomspace already
+contains or what the system is doing with it. It is blind. Data flows
+the same way whether the system has learned nothing yet or has already
+absorbed a representative sample.
+
+The proposal: **make ingestion an ActionAtom, driven by unfulfilled
+WantAtoms.** The system fetches data because it wants to learn more.
+When a want is satisfied, fetching slows or stops. When a new want
+emerges (from a chat prompt, from a structural gap in the atomspace,
+from a user directive), fetching targets that want.
+
+### Rough shape
+
+- A default background WantAtom: "learn more structure from the
+  corpus." Satisfaction tracks a coarse proxy (M3 stabilization rate,
+  or total-atom-count relative to a target, or whatever turns out to
+  work).
+- When this WantAtom has low satisfaction, the walker emits an
+  `ActionAtom "sample-corpus"` which triggers the ingest container
+  to pull one document (or N documents). The ingest container moves
+  from "run continuously" to "run on request."
+- When the want has high satisfaction, actions stop firing. Ingest
+  idles. No bandwidth, no CPU, no growing atomspace.
+- **User-driven WantAtoms (future):** `:want learn about dogs`
+  creates a WantAtom that decomposes through a NeedAtom to one of
+  several `ActionAtom` variants:
+  - `sample-corpus` with a word-presence filter ("dog")
+  - `search-web` with a query (external dependency, safety-laden)
+  - `knn-query` against the existing atomspace (distributional
+    similarity over pair counts; no external dependency)
+  - `walk-region` to explore a specific ConceptAtom's neighborhood
+
+### Why this is interesting
+
+- **Self-regulating.** The system fetches at a rate proportional to
+  its learning pressure. Hot start (empty atomspace, high want intensity)
+  pulls fast; warm steady-state (lots of structure, satisfied want)
+  slows. This is what `max_fragments = 1000` gestures toward clumsily.
+- **Targeted fetching becomes natural.** "Want to learn about dogs"
+  decomposes cleanly to a fetch filtered by dog-related content. No
+  new primitive needed; the want/need walker mechanism supports it.
+- **Multi-source ingestion unifies.** Dataset query, web search, KNN
+  over existing atoms, pattern-matcher over the atomspace - all four
+  are different ActionAtom subtypes with different resolvers. The
+  calling code does not care which resolver ran.
+- **Deviance becomes a want-driving signal.** High deviance (see the
+  [deviance idea](#deviance-as-a-learning-signal)) in some region of
+  the atomspace = that region is actively learning and would benefit
+  from more related material = keep fetching near it. Low deviance =
+  saturated = fetch elsewhere or slow down.
+
+### Where it gets hard
+
+- **Targeted dataset queries are not well-supported.** HuggingFace
+  `datasets` streams are sequential, not queryable by content. Targeted
+  fetching requires either pre-indexing (which defeats the streaming
+  benefit) or a different data source (e.g., a local corpus that does
+  support content queries). For naive "filter by word-presence," we
+  can filter the streaming on our side, but that wastes most of the
+  streamed documents.
+- **Web search is a scope expansion, not a feature.** Real web search
+  integration brings tool-use infrastructure, API keys, rate limits,
+  content filtering, safety review, network costs. Each is its own
+  project. Do not conflate "want-driven fetch" with "web-search
+  fetch" - the former is architectural; the latter is a policy
+  question that deserves explicit deliberation.
+- **KNN without neural embeddings.** Distributional similarity over
+  pair counts CAN approximate KNN: two words are similar if their
+  surrounding-pair distributions are similar. This is classical
+  distributional semantics (pre-word2vec). Compute is cheap, works
+  in-substrate with our existing PairAtoms, and does not require
+  embeddings. Accuracy is lower than neural-embedding KNN, but not
+  nothing, and it preserves the no-neural commitment.
+- **Satisfaction semantics.** "Am I learning enough?" has no single
+  right answer. Could be M3, total atom count, atom diversity, M2
+  reconstruction, user-rated coherence (M4), or composites. Different
+  choices drive different fetching cadence. Needs experimentation,
+  and probably differs per-WantAtom.
+- **Feedback loops.** If a fetch action updates a want's satisfaction
+  and the want drives more actions, that is a real dynamical system.
+  Stability (converging to a sensible steady-state) is not guaranteed.
+  Oscillation and runaway are both plausible failure modes.
+
+### Why not current work
+
+- Want/need modeling does not exist yet; this is a specialization of
+  it and cannot land first.
+- Current ingest works and is simple (`next/ingest.md`). Replacing it
+  with a want-driven version adds complexity that only earns itself
+  when the want/need substrate is in place and has proven useful.
+- External search is safety-laden and should not be built
+  speculatively. Internal sources (existing dataset, atomspace walks,
+  pair-count KNN) are where this concept should first get traction.
+
+### How to apply later (progressively)
+
+1. **When want/need lands:** add one default "learn corpus" WantAtom
+   that ticks once per sleep cycle and emits a `sample-corpus`
+   ActionAtom if satisfaction is below threshold.
+2. **Wire that ActionAtom to the existing ingest container.** Simplest
+   implementation: ingest polls a flag / queue emitted by the
+   cogserver and fetches one document per signal instead of streaming
+   continuously. The ingest container changes behavior; its Docker
+   spec barely changes.
+3. **Add internal-only ActionAtoms first:** `knn-query`, `walk-region`,
+   and `sample-corpus-filtered`. These exercise the want/need loop
+   without external dependencies.
+4. **Targeted filter-by-word fetches** via the existing dataset come
+   next. Honest about efficiency: most streamed documents will be
+   discarded by the filter. Acceptable for POC; revisit if it
+   becomes a scaling concern.
+5. **External search last, if at all.** Needs its own design doc
+   covering tool-use infrastructure, safety, rate limits, and content
+   policy. That is a separate project that happens to connect here;
+   do not treat it as just "another ActionAtom."
+
 ---
 
 ## Notes on graduated ideas
