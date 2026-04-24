@@ -55,6 +55,59 @@ Current plan: stay on Shape A until versus needs to be distributed
 independently (PyPI, public demo, handoff to a collaborator without
 Platformer). At that point, refactor to Shape B. Not a day-one concern.
 
+## The inversion question (versus as an implementation of Platformer)
+
+Considered April 2026, deferred. The question was whether versus should
+consume Platformer as a whole rather than just the `config/` module,
+effectively becoming an implementation *of* Platformer.
+
+Three interpretations of "consume as a whole" were surfaced:
+
+1. **Versus as a Platformer state fragment.** `cd platformer && terraform apply`
+   with versus's states loaded. This requires Platformer's `main.tf` to know
+   about versus's service modules (atomspace, walker, chat), reversing the
+   dependency direction (Platformer depends on versus).
+2. **Platformer imported as a child module.** Does not work cleanly today:
+   Platformer is a root module with its own provider block. Would require
+   refactoring Platformer into a child-importable framework.
+3. **Platformer grows a plugin mechanism.** Service modules register
+   themselves; Platformer discovers them at apply time. Platformer has
+   no such mechanism today.
+
+**Why deferred:**
+
+- Most of Platformer's modules are AWS-specific (compute EKS, storage RDS,
+  portal Port.io). None are useful for a local Docker prototype.
+- The generic parts of Platformer (state-fragment YAML, deep-merge,
+  `null_resource + local-exec` for Docker) are already borrowed or emulated.
+- Full integration would require pulling the AWS, TLS, and Port.io
+  providers transitively, with zero benefit for the current prototype.
+- The inversion requires design work on Platformer's side (plugin
+  mechanism, or accommodating versus's modules in its main.tf) that
+  shouldn't be done speculatively.
+
+**Compatibility bar to maintain:**
+
+Versus should stay integration-ready so the eventual inversion is a
+refactor, not a rewrite. Specifically:
+
+- Versus's service modules are self-contained: no AWS assumptions, no
+  dependencies on resources Platformer-proper provides.
+- State-fragment YAML format matches Platformer's `services:` + `matrix:`
+  top-level structure.
+- Any primitive Platformer has that versus would plausibly reuse (e.g.,
+  future cloud deployment of a CogServer cluster) should be invokable
+  from a versus module without forking.
+
+**When to revisit:**
+
+- Versus needs to deploy on cloud infrastructure Platformer already knows
+  how to provision (EC2, EKS).
+- Platformer adds a plugin / extension mechanism independently, for its
+  own reasons.
+- Multi-service compositions become valuable: versus running alongside
+  other Platformer-managed services in a shared deployment.
+
 ## The two compatibility patches
 
 Both landed in Platformer during scaffolding, both backward-compatible

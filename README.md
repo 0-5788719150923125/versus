@@ -29,21 +29,37 @@ This produces `.versus/atom-schema.scm`, `.versus/decay-rules.scm`,
 `.versus/docker-compose.yml`, and brings up `versus-cog-1`. To tear down:
 `terraform destroy`.
 
-Interact with the running CogServer:
+Talk to versus via the CLI chat client:
 
 ```
-curl http://localhost:18080/            # returns 404; confirms it is alive
-docker exec -it versus-cog-1 guile      # drops into Guile inside the container
+python3 chat.py
 ```
 
-Inside Guile:
+Defaults to `localhost:17001`; override with `--host` / `--port` or
+`COGSERVER_HOST` / `COGSERVER_TELNET_PORT` env vars. Example session:
 
 ```
-(use-modules (opencog))
-(load "/opt/versus/atom-schema.scm")
-(load "/opt/versus/decay-rules.scm")
-(versus-init-atom (Concept "hello") "fragments")
-(versus-known-types)                    ; => (concepts disjuncts fragments)
+versus> connecting to cogserver at localhost:17001...
+versus> connected. commands: :teach <text>, :quit
+you> :teach versus is a probabilistic symbolic system
+bot> learned: versus is a probabilistic symbolic system (count=1.0)
+you> tell me about versus
+bot> versus is a probabilistic symbolic system [provenance: fragment frag:versus is a probabilistic symbolic system, count=1.0]
+you> :quit
+versus> bye.
+```
+
+At this stage `versus-respond` is a trivial word-overlap matcher; the
+walker module will replace it with a real inference walk. `:teach`
+lets you seed the atomspace interactively for testing. Taught
+fragments persist as long as the CogServer container lives (no disk
+persistence yet; that comes with the storage module).
+
+Other ways to poke the system:
+
+```
+curl http://localhost:18080/            # returns 404; confirms cogserver alive
+docker exec -it versus-cog-1 guile      # drops into Guile inside container
 ```
 
 ## Repository layout
@@ -57,6 +73,7 @@ versus/
   variables.tf               tfvars contract
   outputs.tf                 surfaced state for debugging
   terraform.tfvars.example   reference tfvars
+  chat.py                    CLI chat client; run after `terraform apply`
   .gitignore
 
   resolver/                  versus-specific enable-flag logic
@@ -72,6 +89,7 @@ The `next/` directory holds focused documents on specific aspects of the
 design. Read in any order; each is self-contained.
 
 - [next/roadmap.md](./next/roadmap.md) - build order and priorities
+- [next/chat.md](./next/chat.md) - chat MVP design (done; kept as reference)
 - [next/walker.md](./next/walker.md) - **immediate next build target**
 - [next/commitments.md](./next/commitments.md) - the seven design commitments that should not drift
 - [next/evaluation.md](./next/evaluation.md) - falsifiability metrics and realistic success bar

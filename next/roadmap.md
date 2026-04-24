@@ -12,41 +12,54 @@ are callable and produce correct values.
 
 The substrate is live. Nothing else is built.
 
-## Near-term (next two build targets)
+## Near-term (next build targets, in priority order)
 
-### 1. Walker module
+### 1. Chat MVP (prompt/response interface)
+
+Concrete design in [chat.md](./chat.md).
+
+Moved ahead of the walker as of April 2026, per user direction. The
+reasoning: having a prompt/response loop, even a trivial one, makes the
+entire project tangible. It also demonstrates the integration seam (host
+script <-> CogServer telnet <-> inference.scm) end-to-end before we add
+complexity behind the `respond` procedure.
+
+The MVP chat is a CLI Python loop that connects to CogServer's telnet
+port and calls a `versus-respond` Scheme procedure. The `respond`
+procedure at this stage is near-trivial (fragment lookup by word
+overlap), with a `:teach` command to seed FragmentAtoms interactively.
+Provenance is attached to every response.
+
+This is not the walker; it has no learning loop. What it proves is that
+the wiring works.
+
+### 2. Walker module
 
 Concrete design in [walker.md](./walker.md).
 
-The walker is the immediate next target because:
+After the chat MVP, the walker replaces the trivial `respond`
+implementation with a real inference walk, and adds wake/sleep learning
+cycles that populate the atom store from a corpus. The walker is the
+mechanism that, once working, unifies learning, inference, and
+generation (see [commitments.md](./commitments.md) § 7).
 
-- It is the one mechanism that, once working, unifies learning,
-  inference, and generation (see [commitments.md](./commitments.md) § 7).
-- Without it, the substrate has nothing to consume or update the atoms
-  we generate.
-- It can be demonstrated with a toy corpus before ingest is built, which
-  lets us evaluate the wake/sleep architecture in isolation.
+### 3. Ingest worker
 
-### 2. Ingest worker
+Streams fineweb-edu tokens into FragmentAtoms for the walker to consume.
+Probably a Guile driver with a Python subprocess calling HuggingFace
+datasets.
 
-Streams fineweb-edu tokens into FragmentAtoms. Probably a Guile driver
-with a Python subprocess calling HuggingFace datasets.
-
-Not before the walker. A walker with a toy in-memory corpus is
-demonstrable; a walker with a real ingest pipeline but no learning loop
-is just data movement.
+Not before the walker's learning loop works against a toy corpus.
 
 ## Mid-term
 
-### 3. Chat endpoint
+### 4. Chat HTTP endpoint
 
-HTTP server on port 8080. Turns prompts into inference walks; returns
-fragment-stitched responses with provenance attached.
+The chat MVP uses CLI + telnet. A later iteration adds HTTP on port
+8080 for external clients. Reuses the same `versus-respond` procedure;
+the module just swaps transport.
 
-Not before the walker can do generation walks. Chat is just "an HTTP
-wrapper around a generation walk"; the walk has to work first.
-
-### 4. Storage module
+### 5. Storage module
 
 Explicit atomspace-rocks volume lifecycle, snapshots, retention policy.
 Currently the Docker volume is implicit in the compose file.
@@ -56,7 +69,7 @@ A fresh-start-every-apply loop is fine for the first few build iterations.
 
 ## Later (deferred but planned)
 
-### 5. Tiny transformer SelectorAtoms
+### 6. Tiny transformer SelectorAtoms
 
 n_dim=4 micro-networks as first-class atoms. Used at decision points
 where soft-gate selection is inadequate (e.g. grammatical compatibility
@@ -67,13 +80,13 @@ walker's soft-gate-fallback selection to be working and
 evaluatable first. Adding tiny transformers before that is premature
 optimization.
 
-### 6. Platformer integration (Shape B)
+### 7. Platformer integration (Shape B)
 
 Extract Platformer's `config/` module into a shared `platformer-framework`
 package, depended on by both versus and platformer. Not needed until
 versus has to be distributed independently. See [coupling.md](./coupling.md).
 
-### 7. Distributed / networked Atomspace
+### 8. Distributed / networked Atomspace
 
 Currently single-writer, local-only via atomspace-rocks. Eventual targets:
 AtomSpace-Bridge for multi-process access; possibly cloud deployment via

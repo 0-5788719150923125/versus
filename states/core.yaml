@@ -15,7 +15,8 @@ services:
     core:
       image: opencog/learn:latest
       cogserver:
-        port: 18080
+        port: 18080         # HTTP and WebSocket
+        telnet_port: 17001  # Scheme REPL over telnet (used by chat CLI)
       storage:
         driver: atomspace-rocks
         path: /data/atoms

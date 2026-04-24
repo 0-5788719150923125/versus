@@ -4,10 +4,11 @@ output "generated_dir" {
 }
 
 output "cogserver_endpoint" {
-  description = "Host and port where the running CogServer is reachable"
+  description = "Host and ports where the running CogServer is reachable"
   value = {
-    host = "localhost"
-    port = local.cogserver_port
+    host        = "localhost"
+    port        = local.cogserver_port
+    telnet_port = local.cogserver_telnet_port
   }
 }
 

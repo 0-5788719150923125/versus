@@ -34,32 +34,37 @@ locals {
   ]
 
   # --- Core runtime config ----------------------------------------------
-  core_config     = lookup(var.config, "core", {})
-  image           = lookup(local.core_config, "image", "opencog/learn:latest")
-  cogserver_block = lookup(local.core_config, "cogserver", {})
-  cogserver_port  = lookup(local.cogserver_block, "port", 18080)
-  storage_block   = lookup(local.core_config, "storage", {})
-  storage_path    = lookup(local.storage_block, "path", "/data/atoms")
+  core_config           = lookup(var.config, "core", {})
+  image                 = lookup(local.core_config, "image", "opencog/learn:latest")
+  cogserver_block       = lookup(local.core_config, "cogserver", {})
+  cogserver_port        = lookup(local.cogserver_block, "port", 18080)
+  cogserver_telnet_port = lookup(local.cogserver_block, "telnet_port", 17001)
+  storage_block         = lookup(local.core_config, "storage", {})
+  storage_path          = lookup(local.storage_block, "path", "/data/atoms")
 
   # --- Template rendering -----------------------------------------------
+  # Note: timestamp() is deliberately NOT used here. It changes on every
+  # plan, which cascades through content_sha256 triggers and forces the
+  # cogserver container to recreate on every `terraform apply`. Render
+  # output depends only on state-fragment config.
   atom_schema_scm = templatefile("${path.module}/templates/atom-schema.scm.tftpl", {
-    atom_types   = local.atom_types
-    generated_on = timestamp()
+    atom_types = local.atom_types
   })
 
   decay_rules_scm = templatefile("${path.module}/templates/decay-rules.scm.tftpl", {
-    atom_types   = local.atom_types
-    generated_on = timestamp()
+    atom_types = local.atom_types
   })
 
+  inference_scm = templatefile("${path.module}/templates/inference.scm.tftpl", {})
+
   docker_compose_yml = templatefile("${path.module}/templates/docker-compose.yml.tftpl", {
-    image          = local.image
-    cogserver_port = local.cogserver_port
-    storage_path   = local.storage_path
-    path_generated = local.generated_dir
-    walker_enabled = false # TODO: wire when walker module lands
-    walker_image   = local.image
-    generated_on   = timestamp()
+    image                 = local.image
+    cogserver_port        = local.cogserver_port
+    cogserver_telnet_port = local.cogserver_telnet_port
+    storage_path          = local.storage_path
+    path_generated        = local.generated_dir
+    walker_enabled        = false # TODO: wire when walker module lands
+    walker_image          = local.image
   })
 
   compose_path = "${local.generated_dir}/docker-compose.yml"
@@ -81,6 +86,12 @@ resource "local_file" "decay_rules" {
   file_permission = "0644"
 }
 
+resource "local_file" "inference" {
+  filename        = "${local.generated_dir}/inference.scm"
+  content         = local.inference_scm
+  file_permission = "0644"
+}
+
 resource "local_file" "docker_compose" {
   filename        = local.compose_path
   content         = local.docker_compose_yml
@@ -99,13 +110,15 @@ resource "null_resource" "cogserver" {
     local_file.docker_compose,
     local_file.atom_schema,
     local_file.decay_rules,
+    local_file.inference,
   ]
 
   triggers = {
-    compose_hash = local_file.docker_compose.content_sha256
-    schema_hash  = local_file.atom_schema.content_sha256
-    decay_hash   = local_file.decay_rules.content_sha256
-    compose_path = local.compose_path
+    compose_hash   = local_file.docker_compose.content_sha256
+    schema_hash    = local_file.atom_schema.content_sha256
+    decay_hash     = local_file.decay_rules.content_sha256
+    inference_hash = local_file.inference.content_sha256
+    compose_path   = local.compose_path
   }
 
   provisioner "local-exec" {

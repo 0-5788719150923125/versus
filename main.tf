@@ -46,11 +46,15 @@ module "atomspace" {
 }
 
 # ---------------------------------------------------------------------
-# Other service modules land here as they come online per
-# docs/03-principles-loop.md section 7:
+# The chat CLI client is a static Python script at repo root (chat.py)
+# that reads cogserver connection details from environment variables.
+# It is intentionally not a Terraform module: its output is neither
+# generated code nor a managed resource, just a convenience wrapper
+# for the human operator.
+#
+# Other service modules land here as they come online:
 #
 # module "walker"  { count = module.resolver.walker_enabled  ? 1 : 0; source = "./walker";  ... }
 # module "ingest"  { count = module.resolver.ingest_enabled  ? 1 : 0; source = "./ingest";  ... }
-# module "chat"    { count = module.resolver.chat_enabled    ? 1 : 0; source = "./chat";    ... }
 # module "storage" { count = module.resolver.storage_enabled ? 1 : 0; source = "./storage"; ... }
 # ---------------------------------------------------------------------

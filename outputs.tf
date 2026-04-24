@@ -25,6 +25,6 @@ output "generated_dir" {
 }
 
 output "cogserver_endpoint" {
-  description = "Running CogServer endpoint (host + port)"
+  description = "Running CogServer endpoint (host + ports). Pass these to chat.py via COGSERVER_HOST and COGSERVER_TELNET_PORT env vars if non-default."
   value       = try(module.atomspace[0].cogserver_endpoint, null)
 }
