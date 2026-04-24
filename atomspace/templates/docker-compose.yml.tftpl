@@ -31,7 +31,39 @@ services:
       - COGSERVER_PORT=${cogserver_port}
     command: guile -L /opt/versus /opt/versus/walker.scm
 %{ endif ~}
+%{ if ingest_enabled ~}
+  ingest:
+    image: python:3.12-slim
+    depends_on:
+      - cog
+    volumes:
+      - ${ingest_script_dir}:/opt/ingest:ro
+      - versus_ingest_pip_cache:/root/.cache/pip
+      - versus_ingest_hf_cache:/root/.cache/huggingface
+    environment:
+      - PYTHONUNBUFFERED=1
+      - COGSERVER_HOST=cog
+      - COGSERVER_TELNET_PORT=${cogserver_telnet_port}
+      - INGEST_DATASET=${ingest_config.dataset_source}
+      - INGEST_DATASET_CONFIG=${ingest_config.dataset_config}
+      - INGEST_DATASET_SPLIT=${ingest_config.dataset_split}
+      - INGEST_FRAGMENT_MIN_WORDS=${ingest_config.fragment_min_words}
+      - INGEST_FRAGMENT_MAX_WORDS=${ingest_config.fragment_max_words}
+      - INGEST_RATE=${ingest_config.rate_fragments_per_second}
+      - INGEST_MAX_FRAGMENTS=${ingest_config.rate_max_fragments}
+      - INGEST_ROLE_TAG=${ingest_config.role_tag}
+    command: >
+      /bin/sh -c "pip install --quiet --disable-pip-version-check datasets &&
+                  python /opt/ingest/ingest.py"
+    restart: unless-stopped
+%{ endif ~}
 
 volumes:
   versus_atomspace:
     driver: local
+%{ if ingest_enabled ~}
+  versus_ingest_pip_cache:
+    driver: local
+  versus_ingest_hf_cache:
+    driver: local
+%{ endif ~}

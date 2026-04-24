@@ -38,11 +38,36 @@ module "resolver" {
 # spawns CogServer via local-exec (portal/docker.tf pattern).
 # ---------------------------------------------------------------------
 
+# ---------------------------------------------------------------------
+# Ingest: corpus-streaming worker. Data module that has to exist BEFORE
+# atomspace in the dependency graph because atomspace's generated
+# docker-compose embeds the ingest service's env vars and script-dir.
+# The ingest module itself creates no resources; it is a pure
+# configuration transformer.
+# ---------------------------------------------------------------------
+
+module "ingest" {
+  count  = module.resolver.ingest_enabled ? 1 : 0
+  source = "./ingest"
+
+  config = lookup(module.config.service_configs, "ingest", {})
+}
+
+# ---------------------------------------------------------------------
+# Atomspace: the substrate. Generates Scheme and docker-compose,
+# spawns CogServer via local-exec. When ingest is enabled, the
+# generated compose also includes the ingest container.
+# ---------------------------------------------------------------------
+
 module "atomspace" {
   count  = module.resolver.atomspace_enabled ? 1 : 0
   source = "./atomspace"
 
   config = lookup(module.config.service_configs, "atomspace", {})
+
+  ingest_enabled    = module.resolver.ingest_enabled
+  ingest_script_dir = try(module.ingest[0].script_dir, "")
+  ingest_config     = try(module.ingest[0].resolved_config, {})
 }
 
 # ---------------------------------------------------------------------
@@ -55,6 +80,5 @@ module "atomspace" {
 # Other service modules land here as they come online:
 #
 # module "walker"  { count = module.resolver.walker_enabled  ? 1 : 0; source = "./walker";  ... }
-# module "ingest"  { count = module.resolver.ingest_enabled  ? 1 : 0; source = "./ingest";  ... }
 # module "storage" { count = module.resolver.storage_enabled ? 1 : 0; source = "./storage"; ... }
 # ---------------------------------------------------------------------

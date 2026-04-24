@@ -65,6 +65,9 @@ locals {
     path_generated        = local.generated_dir
     walker_enabled        = false # TODO: wire when walker module lands
     walker_image          = local.image
+    ingest_enabled        = var.ingest_enabled
+    ingest_script_dir     = var.ingest_script_dir
+    ingest_config         = var.ingest_config
   })
 
   compose_path = "${local.generated_dir}/docker-compose.yml"

@@ -35,6 +35,11 @@ Talk to versus via the CLI chat client:
 python3 chat.py
 ```
 
+If you enabled the `fineweb-edu` state fragment, an ingest container is
+streaming real corpus data into the atomspace in the background at ~5
+fragments/second. Watch it with `docker compose -f .versus/docker-compose.yml logs -f ingest`
+or directly via `docker logs versus-ingest-1 -f`.
+
 Defaults to `localhost:17001`; override with `--host` / `--port` or
 `COGSERVER_HOST` / `COGSERVER_TELNET_PORT` env vars. Example session:
 
@@ -78,6 +83,7 @@ versus/
 
   resolver/                  versus-specific enable-flag logic
   atomspace/                 substrate module: schema and docker generation
+  ingest/                    ingest module + static scripts/ingest.py
   states/                    operator-authored YAML; edit only here
 
   next/                      working documents; see "For deeper context"
@@ -90,6 +96,7 @@ design. Read in any order; each is self-contained.
 
 - [next/roadmap.md](./next/roadmap.md) - build order and priorities
 - [next/chat.md](./next/chat.md) - chat MVP design (done; kept as reference)
+- [next/ingest.md](./next/ingest.md) - fineweb-edu ingest design (done; kept as reference)
 - [next/walker.md](./next/walker.md) - **immediate next build target**
 - [next/ideas.md](./next/ideas.md) - speculative design notes; things worth thinking about but not yet committed
 - [next/commitments.md](./next/commitments.md) - the seven design commitments that should not drift

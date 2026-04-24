@@ -43,13 +43,17 @@ cycles that populate the atom store from a corpus. The walker is the
 mechanism that, once working, unifies learning, inference, and
 generation (see [commitments.md](./commitments.md) § 7).
 
-### 3. Ingest worker
+### 3. ~~Ingest worker~~ **(shipped April 2026)**
 
-Streams fineweb-edu tokens into FragmentAtoms for the walker to consume.
-Probably a Guile driver with a Python subprocess calling HuggingFace
-datasets.
+Streams fineweb-edu into FragmentAtoms via a separate container that
+runs `datasets` in Python and feeds `versus-teach` calls through
+scheme-over-telnet. Rate-limited (default 5/sec), capped (default
+1000 fragments). See [ingest.md](./ingest.md) for the full design.
 
-Not before the walker's learning loop works against a toy corpus.
+Shipped before the walker because (a) it validates the trivial
+inference loop against real corpus data rather than just hand-typed
+`:teach` sentences, and (b) it gives the walker something real to
+read from once it lands.
 
 ## Mid-term
 

@@ -6,7 +6,7 @@
 
 states = [
   "core",
-  # "fineweb-edu",   # enables the ingest worker (requires the ingest module - not yet scaffolded)
+  # "fineweb-edu",   # enables the ingest container (streams fineweb-edu at 5 fragments/sec, capped at 1000 fragments)
   # "chat-http",     # HTTP chat endpoint (requires an http chat module - not yet scaffolded)
 ]
 # The CLI chat tool (chat.py at repo root) needs no state fragment;

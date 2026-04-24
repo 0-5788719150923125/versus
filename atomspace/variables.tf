@@ -22,3 +22,21 @@ variable "config" {
   type        = any
   default     = {}
 }
+
+variable "ingest_enabled" {
+  description = "If true, the generated docker-compose includes the ingest service alongside cog."
+  type        = bool
+  default     = false
+}
+
+variable "ingest_script_dir" {
+  description = "Absolute path to the directory holding ingest.py. Mounted into the ingest container as /opt/ingest."
+  type        = string
+  default     = ""
+}
+
+variable "ingest_config" {
+  description = "Resolved ingest configuration (flat map) from module.ingest.resolved_config. Threaded into the compose file as env vars."
+  type        = any
+  default     = {}
+}
